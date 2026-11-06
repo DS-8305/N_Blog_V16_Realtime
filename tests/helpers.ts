@@ -54,6 +54,7 @@ export function samplePost(length = 1000): Post {
         mode: 'download' as const,
         query: `테스트 ${i + 1} 장면 ${j + 1}`,
         engine: 'google' as const,
+        originKind: 'publisher' as const,
       })),
     })),
     conclusion: ['마침'],
@@ -75,6 +76,7 @@ export async function fixture(length = 1000, extra = false) {
       mode: 'download',
       query: '다른 장면',
       engine: 'google',
+      originKind: 'publisher',
     });
     post.sections[0].paragraphs.push('추가 본문이에요.');
   }

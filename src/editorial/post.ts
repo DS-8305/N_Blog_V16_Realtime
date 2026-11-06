@@ -242,6 +242,9 @@ export function validatePost(request: JobRequest, research: Research, p: Post): 
           !['google', 'naver', 'direct'].includes(image.engine) ||
           (image.engine === 'direct' &&
             (!sourceIds.has(image.sourceId) || !webUrl(image.imageUrl))) ||
+          (image.engine === 'direct' &&
+            image.candidateId !== undefined &&
+            !/^img-[a-f0-9]{16}$/.test(image.candidateId)) ||
           (image.sourceId && !sourceIds.has(image.sourceId))
         )
           e.push('image_search:' + image.slotId);

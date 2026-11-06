@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
 const child = spawn(
   process.execPath,
-  ['node_modules/vitest/vitest.mjs', 'run', 'tests/browser.test.ts'],
+  [
+    'node_modules/vitest/vitest.mjs',
+    'run',
+    'tests/browser.test.ts',
+    'tests/capture-source-policy.test.ts',
+  ],
   { stdio: 'inherit', env: { ...process.env, NBLOG_BROWSER_TESTS: '1' } },
 );
 child.on('exit', (code) => {

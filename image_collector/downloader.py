@@ -18,6 +18,7 @@ from urllib3.exceptions import ReadTimeoutError
 from .models import (Candidate, Cancelled, DownloadedImage, DuplicateImage,
                      DownloadBudgetExceeded, RejectedImage, ResolvedOptions)
 from .budget import ActiveBudget
+from .source_policy import DisallowedImageSource, assert_allowed_image_source
 
 
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024
@@ -97,12 +98,14 @@ class Downloader:
 
     def download(self, candidate: Candidate, seen_hashes=None) -> DownloadedImage:
         self._check_budget()
+        # Reject known personal origins even if a search thumbnail is on a neutral CDN.
+        assert_allowed_image_source(candidate.source_url, candidate.original_url or None)
         mode = self.options.download_mode
         if mode == "thumbnail":
             return self._download(candidate, candidate.thumbnail_url, "thumbnail", seen_hashes)
         try:
             return self._download(candidate, candidate.original_url, "original", seen_hashes)
-        except (DuplicateImage, DownloadBudgetExceeded):
+        except (DuplicateImage, DownloadBudgetExceeded, DisallowedImageSource):
             raise  # Neither duplicates nor exhausted budgets allow a thumbnail fallback.
         except RejectedImage as exc:
             if mode != "original-preferred":
@@ -112,6 +115,9 @@ class Downloader:
 
     def _download(self, candidate, url, kind, seen_hashes, fallback_reason=""):
         self._check_budget()
+        if url is None or url == "":
+            raise RejectedImage("Missing HTTP(S) image URL")
+        assert_allowed_image_source(candidate.source_url, url)
         if kind == "thumbnail" and isinstance(url, str) and url.startswith("data:"):
             body = self._data_image(url)
             actual_url = url
@@ -123,7 +129,7 @@ class Downloader:
                     referer = self._http_url(candidate.source_url)
                 except RejectedImage:
                     referer = ""
-            body, actual_url = self._http_image(url, referer)
+            body, actual_url = self._http_image(url, referer, candidate.source_url)
         normalized, width, height = self._normalize(body)
         self._check_budget()
         # Dimensions prevent ambiguous byte concatenations across different image shapes.
@@ -176,11 +182,11 @@ class Downloader:
             stack.extend(item for item in (current.__cause__, current.__context__) if item is not None)
         return False
 
-    def _http_image(self, url, referer):
+    def _http_image(self, url, referer, source_url):
         for attempt in range(3):
             self._check_budget()
             try:
-                return self._http_attempt(url, referer)
+                return self._http_attempt(url, referer, source_url)
             except _Retryable as exc:
                 reason, delay = str(exc), exc.delay
             except requests.Timeout as exc:
@@ -201,13 +207,14 @@ class Downloader:
             self._wait(0.25 * (attempt + 1) if delay is None else delay)
         raise AssertionError("Unreachable download attempt")
 
-    def _http_attempt(self, url, referer):
+    def _http_attempt(self, url, referer, source_url):
         headers = {"User-Agent": "Mozilla/5.0 ImageCollector/2.0", "Accept": "image/*"}
         if referer:
             headers["Referer"] = referer
         current_url = url
         for redirects in range(6):
             self._check_budget()
+            assert_allowed_image_source(source_url, url, current_url)
             # Preparing outside Session avoids session cookies, Authorization and netrc.
             # The adapter also avoids Session.send's hidden redirect-body consumption.
             request = requests.Request("GET", self._http_url(current_url), headers=headers).prepare()
@@ -215,10 +222,12 @@ class Downloader:
             response = self.session.get_adapter(request.url).send(request, timeout=self._timeout(), **settings)
             try:
                 self._check_budget()
+                assert_allowed_image_source(source_url, url, response.url)
                 if response.status_code in (301, 302, 303, 307, 308):
                     if redirects == 5 or not response.headers.get("Location"):
                         raise RejectedImage("Image redirect limit or missing redirect target")
                     current_url = self._http_url(urljoin(current_url, response.headers["Location"]))
+                    assert_allowed_image_source(source_url, url, current_url)
                     continue
                 status = response.status_code
                 if status == 429:

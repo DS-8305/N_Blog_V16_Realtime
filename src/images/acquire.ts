@@ -22,15 +22,19 @@ export async function acquireSlots(
     content: { request: JobRequest; post: Post; research: Research },
   ) => Promise<Asset>,
   slot?: string,
+  includePlan?: (plan: ImagePlan) => boolean,
 ) {
   const unlock = await acquireLock(await safeFile(job, 'job.lock'));
   try {
     await assertMutable(job);
     const content = await readContent(job),
       plans = plannedImages(content.post).filter(
-        (p) => p.plan.mode === mode && (!slot || p.plan.slotId === slot),
+        (p) =>
+          p.plan.mode === mode &&
+          (!slot || p.plan.slotId === slot) &&
+          (!includePlan || includePlan(p.plan)),
       );
-    if (slot && !plans.length) throw Error('image_slot_not_found');
+    if (slot && !plans.length && !includePlan) throw Error('image_slot_not_found');
     const old = await optionalJson<AssetManifest>(await safeFile(job, 'assets.json'));
     const currentPlans = plannedImages(content.post);
     const used = new Set(
@@ -64,6 +68,16 @@ export async function acquireSlots(
         try {
           const bytes = await readFile(await safeFile(job, prior.relativePath));
           if (sha256(bytes) === prior.sha256 && !used.has(prior.sha256)) {
+            const { assertAllowedImageSource, assertAllowedImageOrigin } = await import(
+              './sourcePolicy.js'
+            );
+            assertAllowedImageSource(prior.sourceUrl, prior.originalUrl ?? undefined);
+            assertAllowedImageOrigin(
+              item.plan.originKind ?? 'unknown',
+              item.plan.originUrl ?? prior.sourceUrl,
+            );
+            const { validateCandidateAsset } = await import('./candidates.js');
+            await validateCandidateAsset(job, item.plan, prior);
             used.add(prior.sha256);
             await putAsset(job, content.request, content.post, prior);
             continue;

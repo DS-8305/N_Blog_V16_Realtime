@@ -30,6 +30,7 @@ it.each([
     const capture = {
       slotId: 's1-1',
       mode: 'capture' as const,
+      originKind: 'publisher' as const,
       sourceId: 's1',
       url: 'https://example.org/old-page',
       selector: 'article',
@@ -64,6 +65,7 @@ it('invalidates a capture when its referenced source URL changes', async () => {
   const capture = {
     slotId: 's1-1',
     mode: 'capture' as const,
+    originKind: 'publisher' as const,
     sourceId: 's1',
     url: 'https://example.org/news',
     selector: 'article',
@@ -123,6 +125,7 @@ it('rejects an old direct image after its URL changes and another slot is collec
       mode: 'download',
       engine: 'direct',
       query: 'first photo',
+      originKind: 'publisher',
       sourceId: 's1',
       imageUrl: base + '/first',
     } as const;
@@ -161,6 +164,7 @@ it('downloads an observed source image with provenance and rejects an HTML respo
       mode: 'download',
       engine: 'direct',
       query: 'official gallery photo',
+      originKind: 'publisher',
       sourceId: 's1',
       imageUrl: base + '/photo',
     } as any;
@@ -204,6 +208,7 @@ it('accepts a decodable official image served as an octet stream', async () => {
       mode: 'download',
       engine: 'direct',
       query: 'official portrait',
+      originKind: 'publisher',
       sourceId: 's1',
       imageUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/portrait`,
     };

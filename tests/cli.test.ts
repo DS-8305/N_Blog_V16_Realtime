@@ -18,6 +18,40 @@ function run(args: string[], cwd = process.cwd()) {
   const r = spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8' });
   return { ...r, data: () => JSON.parse(r.stdout) };
 }
+it('lists pending images and rejects invalid search options before connecting to a browser', async () => {
+  const f = await fixture();
+  roots.push(f.root);
+  const listed = run(['image:candidates', '--job', f.job], f.root);
+  expect(listed.status, listed.stderr).toBe(0);
+  expect(listed.data().candidates).toEqual([]);
+  expect(
+    run(['image:search', '--job', f.job, '--query', 'person', '--max-queries', '4'], f.root).stderr,
+  ).toContain('image_query_batch_limit');
+  expect(
+    run(
+      [
+        'image:select',
+        '--job',
+        f.job,
+        '--slot',
+        's1-1',
+        '--candidate',
+        'img-1234567890abcdef',
+        '--source-id',
+        's1',
+        '--reviewer',
+        'Codex',
+        '--origin-kind',
+        'personal',
+        '--origin-url',
+        'https://example.org/news',
+        '--note',
+        'private origin',
+      ],
+      f.root,
+    ).stderr,
+  ).toContain('image_origin_unverified:personal');
+});
 it('initializes a job from the built CLI using default manuscript and image counts', async () => {
   const root = await mkdtemp(join(tmpdir(), 'nblog-cli-'));
   roots.push(root);

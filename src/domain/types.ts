@@ -50,9 +50,23 @@ export interface Research {
   sources: Source[];
   facts: Fact[];
 }
-export type ImagePlan = { slotId: string; caption?: string } & (
+export type ImagePlan = {
+  slotId: string;
+  caption?: string;
+  originKind?: 'publisher' | 'official' | 'personal' | 'unknown';
+  originUrl?: string;
+} & (
   | { mode: 'download'; query: string; engine: 'google' | 'naver'; sourceId?: string }
-  | { mode: 'download'; query: string; engine: 'direct'; sourceId: string; imageUrl: string }
+  | {
+      mode: 'download';
+      query: string;
+      engine: 'direct';
+      sourceId: string;
+      imageUrl: string;
+      candidateId?: string;
+      originKind?: 'publisher' | 'official' | 'personal' | 'unknown';
+      originUrl?: string;
+    }
   | {
       mode: 'capture';
       sourceId: string;
@@ -94,6 +108,8 @@ export interface Asset {
   sourceUrl: string;
   originalUrl: string | null;
   requestedUrl?: string;
+  candidateId?: string;
+  candidateReviewFingerprint?: string;
   /** Required for reuse; older unbound assets must be acquired again. */
   acquisitionFingerprint?: string;
   acquiredAt: string;

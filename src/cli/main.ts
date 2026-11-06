@@ -9,6 +9,11 @@ import { validateResearch } from '../domain/validation.js';
 import { readContent, preparePost, recordReview, loadDraft } from '../editorial/bundle.js';
 import { bodyLength, titleSimilarities, validateBodyStyleWarnings } from '../editorial/post.js';
 import { collectImages, runProcess } from '../images/collect.js';
+import {
+  listImageCandidates,
+  searchImageCandidates,
+  selectImageCandidate,
+} from '../images/candidates.js';
 import { captureImages } from '../capture/capture.js';
 import { runDraft } from '../automation/runner.js';
 import {
@@ -34,7 +39,10 @@ node dist/cli.js <command> [options]
   job:status --job 작업폴더
   research:check --job 작업폴더
   post:check --job 작업폴더
-  image:collect --job 작업폴더 [--slot 이미지슬롯]
+  image:search --job 작업폴더 --query 검색어 [--engine google|naver] [--refresh true]
+  image:collect --job 작업폴더 [--slot 이미지슬롯]  미확보 검색어 최대3개·각5장 후보 수집
+  image:candidates --job 작업폴더  사진 목록·미리보기·품질 경고 확인
+  image:select --job 작업폴더 --slot 슬롯 --candidate 후보ID --source-id 출처ID --reviewer 검토자 --origin-kind publisher|official --origin-url 원출처 --note 사진검토내용
   capture:run --job 작업폴더 [--slot 이미지슬롯]
   post:prepare --job 작업폴더
   post:review --job 작업폴더 --fingerprint 값 --reviewer 검토자
@@ -112,6 +120,9 @@ export async function main(argv: string[]): Promise<number> {
         'research:check',
         'post:check',
         'image:collect',
+        'image:search',
+        'image:candidates',
+        'image:select',
         'capture:run',
         'post:prepare',
         'post:review',
@@ -150,8 +161,39 @@ export async function main(argv: string[]): Promise<number> {
           warnings: validateBodyStyleWarnings(content.post),
         };
       } else if (command === 'image:collect') {
-        await collectImages(job, config, options.slot);
-        output = { status: 'images_collected', jobPath: job };
+        output = { ...(await collectImages(job, config, options.slot)), jobPath: job };
+      } else if (command === 'image:search') {
+        const engine = options.engine ?? 'google';
+        if (!['google', 'naver'].includes(engine)) throw Error('image_engine_invalid');
+        if (options.refresh && !['true', 'false'].includes(options.refresh))
+          throw Error('image_refresh_invalid');
+        output = {
+          ...(await searchImageCandidates(
+            job,
+            config,
+            [{ engine: engine as 'google' | 'naver', query: required('query') }],
+            {
+              refresh: options.refresh === 'true',
+              maxQueries: options.maxQueries ? Number(options.maxQueries) : undefined,
+            },
+          )),
+          jobPath: job,
+        };
+      } else if (command === 'image:candidates') {
+        output = { status: 'image_candidates', ...(await listImageCandidates(job)), jobPath: job };
+      } else if (command === 'image:select') {
+        if (options.distinctScene && !['true', 'false'].includes(options.distinctScene))
+          throw Error('image_distinct_scene_invalid');
+        output = await selectImageCandidate(job, {
+          slot: required('slot'),
+          candidateId: required('candidate'),
+          sourceId: required('sourceId'),
+          reviewer: required('reviewer'),
+          originKind: required('originKind') as 'publisher' | 'official',
+          originUrl: required('originUrl'),
+          note: required('note'),
+          distinctScene: options.distinctScene === 'true',
+        });
       } else if (command === 'capture:run') {
         await captureImages(job, config, options.slot);
         output = { status: 'screens_captured', jobPath: job };

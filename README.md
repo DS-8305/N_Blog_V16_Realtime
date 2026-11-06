@@ -101,14 +101,31 @@ $jobPath = $jobResult.jobPath
 ```powershell
 node dist/cli.js research:check --job $jobPath
 node dist/cli.js post:check --job $jobPath
-node dist/cli.js image:collect --job $jobPath
-node dist/cli.js capture:run --job $jobPath
+node dist/cli.js image:search --job $jobPath --query '인물 이름'
+node dist/cli.js image:search --job $jobPath --query '인물 이름 가족사진'
+node dist/cli.js image:search --job $jobPath --query '인물 이름 프러포즈 언론사'
+node dist/cli.js image:candidates --job $jobPath
+```
+
+**요소별 소량 검색 → 실제 사진 검토 → 중복 제거 → 슬롯 배정 → 부족한 장면 재검색** 순서입니다. 기본은 검색어당 후보 5장·35초이며, 원고에 적은 미확보 검색어를 처리하는 `image:collect`는 한 번에 최대 3개 검색어만 검색합니다. 같은 검색어의 완료된 후보는 재사용하고, 추가 검색이 필요할 때만 `image:search --refresh true`를 사용합니다. 구글은 표시된 9230 전용 Chrome을 재사용하고, 네이버 보완 검색은 기존 헤드리스 수집을 사용합니다.
+
+`image:candidates`가 출력하는 `receipts/image-candidates.jpg`와 후보 파일을 직접 열어 인물·장면·잘림·중복·원사진 출처를 검토합니다. JSON에는 검색어, 출처 URL, 크기, 품질 경고, 유사 이미지와 검토 기록이 남습니다. `candidateCount`는 출처별 후보 수, `uniqueImageCount`는 고유 사진 수입니다. 동일 사진이 다른 매체에서 발견되면 파일은 공유하되 출처 선택지는 보존합니다. 가로폭이 좁거나 지나치게 긴 합성 사진, 로고, 기사 하단의 무관한 추천 사진은 선정하지 마세요.
+
+검토한 사진의 게재 페이지를 `research.json`의 실제 출처로 기록한 뒤 후보 ID와 출처 ID를 사용합니다. `--origin-url`은 원사진의 실제 출처이고, `--source-id`가 가리키는 URL은 후보의 게재 페이지 URL과 정확히 같아야 합니다.
+
+```powershell
+node dist/cli.js image:select --job $jobPath --slot s1-1 --candidate 'img-실제후보ID' --source-id '실제출처ID' --reviewer Codex --origin-kind publisher --origin-url 'https://확인한_원출처_URL' --note '실제 사진의 인물·장면·원출처·중복 검토 내용'
+# 필요한 슬롯을 모두 선정한 뒤
 node dist/cli.js post:prepare --job $jobPath
 ```
 
-`image:collect`는 다운로드 슬롯만, `capture:run`은 캡처 슬롯만 처리합니다. 해당 종류가 없으면 외부 작업 없이 종료합니다. 특정 이미지만 다시 확보하려면 `--slot s1-2`처럼 지정합니다. 성공한 현재 계획의 이미지는 재사용하며 실패한 슬롯의 이전 파일은 새 성공으로 취급하지 않습니다. 구글 슬롯은 9230에 붙어 있는 표시 Chrome으로 원본을 우선 받고, 네이버 슬롯은 지금까지와 같이 헤드리스 썸네일 수집입니다. 구글 수집이 실패해도 이미 저장된 이미지와 임시저장 원고는 그대로 둡니다.
+선정한 원본은 검증된 로컬 파일에서 가져오며 다시 다운로드하지 않습니다. 유사도 경고가 있지만 서로 다른 장면임을 직접 확인했다면 검토 내용과 `--distinct-scene true`를 함께 기록합니다. 같은 사진을 두 슬롯에 넣을 수는 없습니다. `image:collect`의 후보 확보를 원고 사진 선정 완료로 간주하지 마세요.
 
-공식 페이지에서 사진 URL을 직접 확인했다면 다운로드 슬롯에 `engine: "direct"`, 해당 페이지의 `sourceId`, 사진의 `imageUrl`을 지정할 수 있습니다. `query`에는 사진을 찾은 검색어나 장면 설명을 남깁니다. 이 방식도 실제 이미지 응답·파일 형식·중복을 검사하고 원문과 다운로드 URL을 기록합니다.
+일반인 개인 블로그·인스타그램 원사진은 다운로드·캡처·캐시 재사용을 금지합니다. 언론 기사에 재게재된 사진도 원출처가 개인 계정이거나 미확인이면 `personal`·`unknown`으로 판단하고 제외합니다. 원사진을 `publisher`(언론 자체 사진/제공 자료) 또는 `official`(공식기관·소속사·확인된 당사자 공식 자료)로 확인한 경우만 선정합니다. URL만으로 확인할 수 없는 자체 도메인 개인 블로그도 이 원출처 검토에서 걸러야 합니다.
+
+차단 플랫폼의 공식 계정 예외는 [출처 정책](config/image-source-policy.json)의 `verifiedOfficialSources`에 정확한 `sourceUrl` 또는 계정 범위의 `sourceUrlPrefix`, `verifiedBy`, `evidenceUrl`을 기록한 경우만 허용합니다. 그 계정의 이미지 URL도 `imageUrls`에 정확히 등록해야 하며 다른 계정의 CDN 사진에 예외를 빌려 쓸 수 없습니다. 기본 등록 예외는 없고, 근거를 추정해서 채우지 않습니다. 정책을 수정하면 `npm run build`로 CLI를 다시 빌드합니다.
+
+확인한 원본 URL을 직접 다운로드하는 `engine: "direct"` 계획과 공개 자료의 `capture:run`도 지원합니다. 해당 페이지의 `sourceId`와 실제 URL에 더해 `originKind: "publisher" | "official"`, `originUrl`을 기록해야 합니다. 캡처 selector는 실제 원문에서 확인합니다. 차단 출처나 리다이렉트로 정책을 우회할 수 없으며, 이전 성공 파일과 실패 기록은 보존합니다.
 
 완성 원고와 `preview.md`, **실제 이미지 전체**를 확인한 뒤 `post:prepare`가 출력한 fingerprint로 검토를 기록합니다.
 
@@ -136,6 +153,8 @@ node dist/cli.js job:status --job $jobPath
   {
     "slotId": "s1-3",
     "mode": "capture",
+    "originKind": "publisher",
+    "originUrl": "https://확인한_원출처_URL",
     "sourceId": "source-1",
     "url": "https://원문주소",
     "selector": "실제 확인한 영역 selector",
@@ -180,3 +199,5 @@ node dist/cli.js help
 테스트 임시 폴더의 `rename`이나 디렉터리 링크가 제한된 실행 환경에서는 정상 로컬 터미널에서 실행합니다. 이번 버전의 확인 범위는 [V16 검증 기록](docs/v16-validation.md), 이전 실계정 확인은 [과거 기록](docs/validation.md)에 남깁니다.
 
 참고 코드와 기준 커밋은 [출처 기록](docs/references.md), 이번 변경은 [V16 설계](docs/superpowers/specs/2026-11-06-quality-fixes-design.md)를 참고하세요. 원고·계정·프로필·캡처·실행 기록은 `workspaces/`와 `.runtime/`에 두며 Git에서 제외합니다.
+
+공개 자료 캡처는 로그인 쿠키를 공유하지 않는 별도 임시 컨텍스트에서 실행합니다. 리다이렉트가 있으면 `capture_redirect_requires_canonical_url`로 중단하므로 직접 확인한 최종 URL을 계획에 기록합니다.

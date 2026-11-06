@@ -10,6 +10,7 @@ from .models import (Candidate, CollectionOptions, RunResult, JobResult, Collect
                      Cancelled, NeedsAttention, RejectedImage, DuplicateImage)
 from .storage import RunStore, load_run
 from .budget import ActiveBudget
+from .source_policy import assert_allowed_image_source
 
 
 def _status(jobs):
@@ -177,6 +178,9 @@ def run_collection(keywords, options: CollectionOptions, output_root="downloaded
                     if len(store.saved_rows(job)) >= item_options.limit:
                         break
                     try:
+                        assert_allowed_image_source(candidate.source_url, candidate.original_url or None)
+                        if item_options.download_mode == "thumbnail" or not candidate.original_url:
+                            assert_allowed_image_source(candidate.source_url, candidate.thumbnail_url)
                         image = download.download(candidate,seen_hashes=seen_hashes)
                     except DuplicateImage as exc:
                         record_candidate_error(job,candidate,"duplicate",exc)

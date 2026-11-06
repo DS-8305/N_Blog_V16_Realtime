@@ -16,6 +16,7 @@ export async function validateAssets(
   job: string,
   request: JobRequest,
   post: Post,
+  options: { allowHistoricalSources?: boolean } = {},
 ): Promise<Asset[]> {
   const manifest = await readJson<AssetManifest>(await safeFile(job, 'assets.json'));
   if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.assets))
@@ -26,11 +27,21 @@ export async function validateAssets(
   if (plans.length !== manifest.assets.length) throw Error('asset_slot_count');
   const ids = new Set<string>(),
     hashes = new Set<string>(),
+    pixelHashes = new Set<string>(),
     ordered: Asset[] = [];
   for (const { sectionId, plan } of plans) {
     const matches = manifest.assets.filter((a) => a.slotId === plan.slotId);
     if (matches.length !== 1) throw Error('asset_slot:' + plan.slotId);
     const a = matches[0];
+    if (!options.allowHistoricalSources) {
+      const { assertAllowedImageSource, assertAllowedImageOrigin } = await import(
+        './sourcePolicy.js'
+      );
+      assertAllowedImageSource(a.sourceUrl, a.originalUrl ?? undefined);
+      assertAllowedImageOrigin(plan.originKind ?? 'unknown', plan.originUrl ?? a.sourceUrl);
+      const { validateCandidateAsset } = await import('./candidates.js');
+      await validateCandidateAsset(job, plan, a);
+    }
     if (
       !a.assetId ||
       ids.has(a.assetId) ||
@@ -76,6 +87,12 @@ export async function validateAssets(
       throw Error('asset_bytes:' + plan.slotId);
     if (hashes.has(a.sha256)) throw Error('duplicate_image:' + plan.slotId);
     hashes.add(a.sha256);
+    if (!options.allowHistoricalSources) {
+      const { analyzeCandidateImage } = await import('./candidateQuality.js');
+      const pixels = (await analyzeCandidateImage(bytes)).pixelHash;
+      if (pixelHashes.has(pixels)) throw Error('duplicate_image:' + plan.slotId);
+      pixelHashes.add(pixels);
+    }
     ordered.push(a);
   }
   return ordered;

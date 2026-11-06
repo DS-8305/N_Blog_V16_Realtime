@@ -1,6 +1,6 @@
 import { it, expect, afterEach } from 'vitest';
-import { chmod, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { fixture } from './helpers.js';
 import { atomicJson } from '../src/state/files.js';
 import { resolveConfig } from '../src/config.js';
@@ -71,28 +71,38 @@ it('lets a user-check marker outlive the original process timeout', async () => 
   );
   expect(result.code).toBe(0);
   await expect(
-    runProcess(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 900)'], process.cwd(), 300),
+    runProcess(
+      process.execPath,
+      ['-e', 'setTimeout(() => process.exit(0), 900)'],
+      process.cwd(),
+      300,
+    ),
   ).rejects.toThrow('collector_timeout');
 });
 
-it('records a Google collection failure without replacing images already on disk', async () => {
+it('records a failed Google search round without replacing images already on disk', async () => {
   const f = await fixture();
   roots.push(f.root);
-  const script = join(f.root, 'fail-collector.sh');
+  const module = join(f.root, 'image_collector');
+  await mkdir(module);
   await writeFile(
-    script,
-    '#!/bin/sh\necho NBLOG_AWAIT_USER\necho "google chrome needs a person"\nexit 2\n',
+    join(module, '__main__.py'),
+    'print("offline collector failure")\nraise SystemExit(2)\n',
   );
-  await chmod(script, 0o755);
+  const python = process.platform === 'win32' ? resolve('.venv/Scripts/python.exe') : 'python3';
+  const plan = f.post.sections[0].images[0];
+  if (plan.mode !== 'download') throw Error('fixture must use a download plan');
+  plan.query += ' revised scene';
+  await atomicJson(join(f.job, 'post.json'), f.post);
   const imagePath = join(f.job, f.assets[0].relativePath);
   const before = await readFile(imagePath);
-  await expect(
-    collectImages(f.job, { ...f.config, pythonPath: script }, 's1-1'),
-  ).rejects.toThrow('image_collection_failed:s1-1');
+  await expect(collectImages(f.job, { ...f.config, pythonPath: python }, 's1-1')).rejects.toThrow(
+    'image_collection_failed:exit_2',
+  );
   expect(await readFile(imagePath)).toEqual(before);
-  const attempt = JSON.parse(await readFile(join(f.job, 'receipts/attempt-s1-1.json'), 'utf8'));
-  expect(attempt.status).toBe('failed');
-  expect(attempt.error).toContain('exit_2');
+  const pool = JSON.parse(await readFile(join(f.job, 'receipts/image-candidates.json'), 'utf8'));
+  expect(pool.queries[0].status).toBe('failed');
+  expect(pool.queries[0].error).toContain('exit_2');
 });
 
 it('rejects a Google CDP port that collides with the Naver editor port', async () => {
@@ -102,9 +112,6 @@ it('rejects a Google CDP port that collides with the Naver editor port', async (
     resolveConfig({ blogId: 'test-blog', cdp: 'http://127.0.0.1:9230' }, f.root),
   ).rejects.toThrow('cdp_port_collision');
   await expect(
-    resolveConfig(
-      { blogId: 'test-blog', googleProfile: '.runtime/chrome-profile' },
-      f.root,
-    ),
+    resolveConfig({ blogId: 'test-blog', googleProfile: '.runtime/chrome-profile' }, f.root),
   ).rejects.toThrow('chrome_profile_collision');
 });

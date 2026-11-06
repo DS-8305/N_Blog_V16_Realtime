@@ -123,7 +123,9 @@ export async function readContent(job: string, options: ResearchValidationOption
 }
 export async function draftBasis(job: string, options: ResearchValidationOptions = {}) {
   const content = await readContent(job, options),
-    assets = await validateAssets(job, content.request, content.post);
+    assets = await validateAssets(job, content.request, content.post, {
+      allowHistoricalSources: options.checkFreshness === false,
+    });
   return { ...content, assets, fingerprint: fingerprint({ ...content, assets, relatedPosts }) };
 }
 export async function preparePost(job: string) {
