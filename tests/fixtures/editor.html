@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ko">
+  <meta charset="utf-8" /><title>Local editor regression fixture</title>
+  <style>
+    body {
+      font: 16px sans-serif;
+      margin: 24px auto;
+      width: 760px;
+    }
+    button {
+      padding: 8px;
+    }
+    p {
+      min-height: 24px;
+      margin: 8px 0;
+      padding: 4px;
+      outline: 1px solid #ddd;
+    }
+    .se-title-text {
+      font-size: 24px;
+    }
+    .se-module-image {
+      padding: 12px;
+      border: 1px solid #ccc;
+      min-height: 40px;
+    }
+    .se-caption {
+      font-size: 13px;
+    }
+    .se-quotation {
+      border-left: 4px solid #888;
+      padding-left: 20px;
+    }
+    .se-components-wrap {
+      padding: 12px;
+    }
+    .controls {
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 5;
+    }
+  </style>
+  <div class="controls">
+    <button data-name="bold" aria-pressed="false">굵게</button
+    ><button data-group="propertyToolbar" data-type="drop-down" data-name="align-drop-down-with-justify" class="se-property-toolbar-drop-down-button se-align-justify-toolbar-button" aria-expanded="false">정렬</button
+    ><div class="align-options" hidden><button data-name="align-drop-down-with-justify" data-role="option" data-value="left">왼쪽 정렬</button><button data-name="align-drop-down-with-justify" data-role="option" data-value="center">가운데 정렬</button><button data-name="align-drop-down-with-justify" data-role="option" data-value="right">오른쪽 정렬</button><button data-name="align-drop-down-with-justify" data-role="option" data-value="justify">양끝 정렬</button></div
+    ><button data-name="quotation">인용</button
+    ><button data-group="documentToolbar" data-type="icon-select" data-role="option" data-name="quotation" data-value="default" data-log="dot.quota0">인용구 1</button
+    ><button data-group="documentToolbar" data-type="icon-select" data-role="option" data-name="quotation" data-value="quotation_line" data-log="dot.quota1">인용구 2</button
+    ><input type="file" accept="image/*" /><button data-click-area="tpb.save">임시저장</button
+    ><button class="save_count_btn">0</button>
+  </div>
+  <div class="se-section-documentTitle">
+    <div class="se-title-text">
+      <p contenteditable="true"><span class="__se-node"></span></p>
+    </div>
+  </div>
+  <div class="se-components-wrap"></div>
+  <button id="add">본문 추가</button>
+  <div id="saved-list"></div>
+  <script>
+    const wrap = document.querySelector('.se-components-wrap'),
+      title = document.querySelector('.se-title-text p'),
+      list = document.querySelector('#saved-list'),
+      counter = document.querySelector('.save_count_btn');
+    let imageIndex = 0,
+      current = false;
+    function paragraph() {
+      const p = document.createElement('p');
+      p.className = 'se-text-paragraph';
+      p.contentEditable = 'true';
+      p.innerHTML = '<span class="__se-node"></span>';
+      return p;
+    }
+    function focus(p) {
+      p.focus();
+      const range = document.createRange();
+      range.selectNodeContents(p);
+      range.collapse(false);
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(range);
+    }
+    function body() {
+      const c = document.createElement('div');
+      c.className = 'se-component se-text';
+      const m = document.createElement('div');
+      m.className = 'se-module-text';
+      const p = paragraph();
+      m.append(p);
+      c.append(m);
+      wrap.append(c);
+      return p;
+    }
+    body();
+    document.querySelector('#add').onclick = () => focus(body());
+    document.addEventListener('input', (e) => {
+      const p = e.target.closest('p[contenteditable]');
+      if (!p) return;
+      if (document.querySelector('[data-name=bold]').getAttribute('aria-pressed') === 'true')
+        p.dataset.boldApplied = 'true';
+      const text = p.textContent;
+      p.innerHTML = '';
+      const s = document.createElement('span');
+      s.className = '__se-node';
+      s.textContent = text;
+      p.append(s);
+      focus(p);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        list.innerHTML = '';
+        return;
+      }
+      if (e.key !== 'Enter') return;
+      const p = document.activeElement?.closest('p');
+      if (!p) return;
+      e.preventDefault();
+      if (p === title) {
+        focus(wrap.querySelector('.se-text-paragraph'));
+        return;
+      }
+      const next = paragraph();
+      p.after(next);
+      focus(next);
+    });
+    document
+      .querySelectorAll('.controls button')
+      .forEach((b) => (b.onmousedown = (e) => e.preventDefault()));
+    document.querySelector('[data-name=bold]').onclick = (e) => {
+      const b = e.currentTarget;
+      b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+    };
+    const alignButton = document.querySelector('[data-type=drop-down]'),
+      alignOptions = document.querySelector('.align-options');
+    wrap.addEventListener('focusin', (event) => {
+      const paragraph = event.target.closest('.se-text-paragraph');
+      if (!paragraph) return;
+      const alignment =
+        paragraph.className.match(/se-text-paragraph-align-(left|center|right|justify)/)?.[1] ??
+        'justify';
+      alignButton.className = `se-property-toolbar-drop-down-button se-align-${alignment}-toolbar-button`;
+    });
+    alignButton.onclick = () => {
+      alignOptions.hidden = !alignOptions.hidden;
+      alignButton.setAttribute('aria-expanded', String(!alignOptions.hidden));
+    };
+    alignOptions.querySelectorAll('button').forEach((option) => {
+      option.onclick = () => {
+        const node = getSelection()?.anchorNode,
+          p = node instanceof Element ? node.closest('.se-text-paragraph') : node?.parentElement?.closest('.se-text-paragraph');
+        if (!p) return;
+        p.classList.remove('se-text-paragraph-align-left', 'se-text-paragraph-align-center', 'se-text-paragraph-align-right', 'se-text-paragraph-align-justify');
+        p.classList.add('se-text-paragraph-align-' + option.dataset.value);
+        alignButton.className = 'se-property-toolbar-drop-down-button se-align-' + option.dataset.value + '-toolbar-button';
+        alignOptions.hidden = true;
+        alignButton.setAttribute('aria-expanded', 'false');
+      };
+    });
+    document.querySelectorAll('[data-name=quotation][data-role=option]').forEach((option) => {
+      option.onclick = () => {
+        const c = document.createElement('div');
+        c.className = 'se-component se-quotation';
+        c.dataset.quotationStyle = option.dataset.value;
+        const p = paragraph();
+        c.append(p);
+        wrap.append(c);
+        focus(p);
+      };
+    });
+    document.querySelector('input[type=file]').onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const c = document.createElement('div');
+      c.className = 'se-component se-image';
+      c.dataset.id = 'image-' + ++imageIndex;
+      const m = document.createElement('div');
+      m.className = 'se-module-image';
+      m.dataset.id = c.dataset.id;
+      const img = document.createElement('img');
+      img.src = 'https://assets.test/' + encodeURIComponent(file.name);
+      m.append(img);
+      const cap = document.createElement('div');
+      cap.className = 'se-caption';
+      cap.append(paragraph());
+      c.append(m, cap);
+      const last = wrap.lastElementChild;
+      if (last?.classList.contains('se-text') && !last.innerText.trim()) last.before(c);
+      else {
+        wrap.append(c);
+        body();
+      }
+    };
+    function saved() {
+      return JSON.parse(localStorage.getItem('saved-drafts') || '[]');
+    }
+    function count() {
+      counter.textContent = String(saved().length);
+    }
+    count();
+    document.querySelector('[data-click-area="tpb.save"]').onclick = () => {
+      const items = saved();
+      items.push({ title: title.innerText, html: wrap.innerHTML });
+      localStorage.setItem('saved-drafts', JSON.stringify(items));
+      current = true;
+      count();
+    };
+    counter.onclick = () => {
+      list.innerHTML = '';
+      saved().forEach((item) => {
+        const row = document.createElement('div');
+        if (current && !new URLSearchParams(location.search).has('omitCurrent')) {
+          const flag = document.createElement('span');
+          flag.className = 'current_post';
+          row.append(flag);
+        }
+        const b = document.createElement('button');
+        b.dataset.clickArea = 'tpb*s.tlist';
+        const s = document.createElement('span');
+        s.textContent = item.title;
+        b.append(s);
+        b.onclick = () => {
+          list.innerHTML = '';
+          const load = () => {
+            title.innerHTML = '';
+            const node = document.createElement('span');
+            node.className = '__se-node';
+            node.textContent = item.title;
+            title.append(node);
+            wrap.innerHTML = item.html;
+            list.innerHTML = '';
+            current = true;
+          };
+          const delay = Number(new URLSearchParams(location.search).get('delay') || 0);
+          if (delay) setTimeout(load, delay);
+          else load();
+        };
+        row.append(b);
+        list.append(row);
+      });
+    };
+  </script>
+</html>

@@ -1,0 +1,18 @@
+{
+  "cdpEndpoint": "http://127.0.0.1:9225",
+  "profilePath": ".runtime/chrome-profile",
+  "googleCdpEndpoint": "http://127.0.0.1:9230",
+  "googleProfilePath": ".runtime/chrome-google-profile",
+  "workspaceRoot": "workspaces",
+  "blogId": "YOUR_BLOG_ID",
+  "conditions": {
+    "bodyMin": 1000,
+    "bodyMax": 1600,
+    "sectionMin": 4,
+    "sectionMax": 6,
+    "sectionCount": 4,
+    "imagesPerSection": 2,
+    "imageMin": 10,
+    "imageMax": 12
+  }
+}

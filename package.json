@@ -1,0 +1,27 @@
+{
+  "name": "n-blog-v16-realtime",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:browser": "node scripts/browser-test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "playwright": "1.61.1",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.0",
+    "esbuild": "0.24.2",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9"
+  }
+}

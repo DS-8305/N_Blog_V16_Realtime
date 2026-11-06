@@ -1,0 +1,15 @@
+{
+  "conditions": {
+    "bodyMin": 1000,
+    "bodyMax": 1600,
+    "sectionMin": 4,
+    "sectionMax": 6,
+    "sectionCount": 4,
+    "imagesPerSection": 2,
+    "imageMin": 10,
+    "imageMax": 12
+  },
+  "titleCandidateCount": 7,
+  "tagCount": 10,
+  "researchWindowHours": 72
+}
